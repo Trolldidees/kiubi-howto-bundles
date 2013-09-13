@@ -1,0 +1,133 @@
+<style>
+ul.bundles li {
+	clear: both;
+	display: block;
+	height: 130px;
+	list-style: none;
+	margin-bottom: 10px;
+}
+ul.bundles li div {	margin: 20px; width: 200px; }
+ul.bundles li a img {
+	border: 1px solid #EEE;
+	height: 120px;
+	vertical-align: middle;
+	width: 120px;
+}
+ul.bundles li span.plus {
+	color: #AAA;
+	font-size: 2.5pc;
+	line-height: 120px;
+	margin: 0 10px;
+	vertical-align: middle;
+}
+ul.bundles li a,
+ul.bundles li div, 
+ul.bundles li span.plus {
+	float: left;
+	display: block;
+}
+</style>
+
+<article id="produit_bundles" style="display:none">
+  <h2>Bundles produits</h2>
+  <ul class="bundles">
+	  <li style="display:none" id="bundle_template">
+		  <a class="product_a" href="#"><img src="{racine}/{theme}/{lg}/images/produit_mini.gif"/></a>
+		  <span class="plus">+</span>
+		  <a class="product_b" href="#"><img src="{racine}/{theme}/{lg}/images/produit_mini.gif"/></a>
+		  <div>
+			  <strong>Les 2 produits pour <span class="price"></span></strong>
+			  <br/><input type="submit" value="Ajouter au panier" />
+		  </div>
+	  </li>
+  </ul>
+</article>
+
+<script type="text/javascript" src="{cdn}/js_src/api/1.0/jquery/core.js"></script>
+<script type="text/javascript" src="{cdn}/js_src/api/1.0/jquery/catalog.js"></script>
+<script type="text/javascript" src="{cdn}/js_src/api/1.0/jquery/cart.js"></script>
+
+
+<script>
+	jQuery(function($){
+		
+		// On cherche le produit id courant dans la page.
+		var product_id = parseInt($('.produit_detail input[name=pid]').val());
+		
+		// le produit_id n'a pas été trouvée, le script se termine ici
+		if(!product_id) return;
+		
+		var query = $.when(
+			kiubi.catalog.getProduct(product_id, {extra_fields : "price_label,variants"}),
+			kiubi.catalog.getLinkedProducts(product_id, {extra_fields : "price_label,variants", limit : 2, sort:'rand' })
+		);
+		
+		query.done(function(request_1, request_2){
+			
+			var product = request_1[1];
+			var linked_products = request_2[1];
+			
+			$.each(linked_products, function(num, linked_product){
+				createBundle(product, linked_product);
+			});
+			
+			$('#produit_bundles ul.bundles li').length > 1 && $('#produit_bundles').show();
+		});
+				
+		function createBundle(a, b) {
+			
+			var variant_a = getVariant(a);
+			var variant_b = getVariant(b);
+			
+			if(!variant_a || !variant_b) return;
+			
+			// On créé un copie du template, en prenant soint de 
+			// supprimer l'attribut id sur l'élément cloné
+			var bundle = $('li#bundle_template').clone().attr("id", "");
+			
+			// Mise à jour des illustrations si disponible
+			if(variant_a.thumb) $('.product_a img', bundle).attr('src', variant_a.thumb.url_miniature);
+			if(variant_b.thumb) $('.product_b img', bundle).attr('src', variant_b.thumb.url_miniature);
+			
+			// Mise à jour des liens et title 
+			$('.product_a', bundle).attr({href: a.url, title: a.name});
+			$('.product_b', bundle).attr({href: b.url, title: b.name});
+			
+			// Mise à jour du prix du bundle
+			var price = (variant_a.price_inc_vat + variant_b.price_inc_vat).toFixed(2);
+			$('.price', bundle).html(price.replace(/\./,',') + ' &euro;');
+			
+			// Attache d'un callback au clic sur le bouton "Ajouter au panier"
+			$('input[type=submit]', bundle).click(function(){
+				var items = {};
+				items[variant_a.id] = "+1";
+				items[variant_b.id] = "+1";
+				kiubi.cart.addItems(items).done(function(){
+					document.location = "/ecommerce/panier.html"
+				});
+			});
+			
+			bundle.appendTo('#produit_bundles ul.bundles').show();
+		}
+				
+		/**
+		 * Helper permettant de récupéré la première variante disponible
+		 * d'un produit. Retourne false si aucune variante n'a été trouvée
+		 * @param product
+		 * @return variant
+		 */
+		function getVariant(product) {
+			
+			if(!product.variants) return false;
+			
+			var variant = false;
+			$.each(product.variants, function() {
+				if(!this.is_available || variant) return;
+				variant = this;
+			});
+			
+			return variant;
+		}
+		
+	});
+</script>
